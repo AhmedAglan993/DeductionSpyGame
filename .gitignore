@@ -97,3 +97,7 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+Assets/Models/B2_01.fbx
+Assets/Models/GF_FF.fbx
+Assets/Models/Landscape.fbx
+Assets/Models/Spectech_V02_001_ForUnity.fbx
