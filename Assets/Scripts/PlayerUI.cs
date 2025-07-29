@@ -22,17 +22,23 @@ public class PlayerUI : MonoBehaviour
 
         // Start polling for the word
         InvokeRepeating(nameof(CheckWordStatus), 1f, 1f);
+        InvokeRepeating(nameof(Onreveal), 1f, 1f);
 
         // Listen for reveal
-        FirebaseManager.Instance.OnReveal(() =>
+        Onreveal();
+    }
+
+    private void Onreveal()
+    {
+        print(FirebaseManager.Instance.RevealedImposter);
+        FirebaseManager.Instance.ListenForImposterReveal((RevealedImposter) =>
         {
-            waitingText.text = "The imposter was: " + FirebaseManager.Instance.RevealedImposter;
+            waitingText.text = "The imposter was: " + RevealedImposter;
         });
     }
 
     private void CheckWordStatus()
     {
-        if (wordReceived) return;
 
         FirebaseManager.Instance.JoinRoom(room, name, (isImposter, word) =>
         {
@@ -41,7 +47,6 @@ public class PlayerUI : MonoBehaviour
             {
                 wordText.text = isImposter ? "You are the IMPOSTER!" : $"Your word is: {word}";
                 wordReceived = true;
-                CancelInvoke(nameof(CheckWordStatus));
             }
         });
     }

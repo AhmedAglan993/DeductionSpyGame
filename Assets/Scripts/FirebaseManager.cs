@@ -136,7 +136,7 @@ public class FirebaseManager : MonoBehaviour
         string url = $"{firebaseUrl}rooms/{room}/players.json";
         UnityWebRequest req = UnityWebRequest.Get(url);
         yield return req.SendWebRequest();
-
+        this.room = room;
         if (req.result == UnityWebRequest.Result.Success)
         {
             var json = req.downloadHandler.text;
@@ -178,39 +178,27 @@ public class FirebaseManager : MonoBehaviour
 
     IEnumerator RevealRoutine()
     {
-        string url = $"{firebaseUrl}rooms/{PlayerPrefs.GetString("room")}/players.json";
-        print(url);
+        string url = $"{firebaseUrl}rooms/{room}/players.json";
         UnityWebRequest req = UnityWebRequest.Get(url);
         yield return req.SendWebRequest();
 
         if (req.result == UnityWebRequest.Result.Success)
         {
-            var json = req.downloadHandler.text;
-            Debug.Log("Received JSON: " + json);
-
-            var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(json);
-
-            if (dict == null)
-            {
-                Debug.LogError("Failed to deserialize player data.");
-                yield break;
-            }
-
-            foreach (var kv in dict)
-            {
-                Debug.Log($"Checking player {kv.Key}, isImposter: {kv.Value.isImposter}");
-            }
-
+            print(req.downloadHandler.text);
+            var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(req.downloadHandler.text);
             var imposter = dict.FirstOrDefault(kv => kv.Value.isImposter);
             RevealedImposter = imposter.Key;
 
-            Debug.Log("Imposter is: " + RevealedImposter);
-        }
-        else
-        {
-            Debug.LogError("Failed to fetch player data: " + req.error);
+            // ✅ Save to Firebase so all players see it
+            string revealUrl = $"{firebaseUrl}rooms/{room}/revealedImposter.json";
+            var putRequest = UnityWebRequest.Put(revealUrl, $"\"{RevealedImposter}\"");
+            putRequest.SetRequestHeader("Content-Type", "application/json");
+            yield return putRequest.SendWebRequest();
+
+            Debug.Log($"Revealed Imposter: {RevealedImposter}");
         }
     }
+
 
 
     IEnumerator Put(string path, string json)
@@ -220,17 +208,36 @@ public class FirebaseManager : MonoBehaviour
         yield return req.SendWebRequest();
     }
 
-    public void OnReveal(Action callback)
+
+
+    public void ListenForImposterReveal(Action<string> onImposterRevealed)
     {
-        StartCoroutine(RevealListener(callback));
+        StartCoroutine(RevealListener(onImposterRevealed));
     }
 
-    IEnumerator RevealListener(Action callback)
+    IEnumerator RevealListener(Action<string> onImposterRevealed)
     {
-        while (string.IsNullOrEmpty(RevealedImposter))
+        string url = $"{firebaseUrl}rooms/{room}/revealedImposter.json";
+
+        while (true)
         {
+            UnityWebRequest req = UnityWebRequest.Get(url);
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                string result = req.downloadHandler.text;
+                if (!string.IsNullOrEmpty(result) && result != "null")
+                {
+                    // Strip quotes from JSON string
+                    RevealedImposter = result.Trim('"');
+                    onImposterRevealed?.Invoke(RevealedImposter);
+                    yield break; // Stop listening
+                }
+            }
+
             yield return new WaitForSeconds(1);
         }
-        callback();
     }
+
 }
