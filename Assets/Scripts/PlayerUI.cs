@@ -36,6 +36,7 @@ public class PlayerUI : MonoBehaviour
 
         FirebaseManager.Instance.JoinRoom(room, name, (isImposter, word) =>
         {
+            print(word);
             if (!string.IsNullOrEmpty(word))
             {
                 wordText.text = isImposter ? "You are the IMPOSTER!" : $"Your word is: {word}";

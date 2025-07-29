@@ -42,7 +42,7 @@ public class RefereeUI : MonoBehaviour
             }
             else
             {
-             //   playersText.text = "Players:\n" + string.Join("\n", players.);
+                playersText.text = "Players:\n" + string.Join("\n", players.Select(p => $"{p.playerName} - {(p.isImposter ? "Imposter" : "Not Imposter")}"));
             }
         });
     }

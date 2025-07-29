@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
 using System.Collections.Generic;
@@ -28,8 +28,36 @@ public class FirebaseManager : MonoBehaviour
     {
         room = roomCode;
         playerName = name;
-        var player = new Player { playerName = name, isImposter = false };
-        StartCoroutine(Put($"rooms/{room}/players/{name}.json", JsonConvert.SerializeObject(player)));
+        StartCoroutine(JoinIfNotExists(callback));
+    }
+
+    IEnumerator JoinIfNotExists(Action<bool, string> callback)
+    {
+        string playerUrl = $"{firebaseUrl}rooms/{room}/players/{playerName}.json";
+        UnityWebRequest checkReq = UnityWebRequest.Get(playerUrl);
+        yield return checkReq.SendWebRequest();
+
+        if (checkReq.result == UnityWebRequest.Result.Success && checkReq.downloadHandler.text != "null")
+        {
+            // Player already exists → don't overwrite, just get word and role
+            Debug.Log("Player already exists, skipping re-add.");
+        }
+        else
+        {
+            // Player not found → add them with just playerName (no isImposter)
+            var player = new Player { playerName = playerName };
+            string json = JsonConvert.SerializeObject(player);
+            UnityWebRequest addReq = UnityWebRequest.Put(playerUrl, json);
+            addReq.SetRequestHeader("Content-Type", "application/json");
+            yield return addReq.SendWebRequest();
+
+            if (addReq.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Failed to add player: " + addReq.error);
+            }
+        }
+
+        // Start polling for word and role regardless
         StartCoroutine(GetWordAndRole(callback));
     }
 
@@ -85,7 +113,8 @@ public class FirebaseManager : MonoBehaviour
                 else
                 {
                     var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(jsonText);
-                    var players = dict.Select(kv => {
+                    var players = dict.Select(kv =>
+                    {
                         kv.Value.playerName = kv.Key;
                         return kv.Value;
                     }).ToList();
@@ -111,8 +140,11 @@ public class FirebaseManager : MonoBehaviour
         if (req.result == UnityWebRequest.Result.Success)
         {
             var json = req.downloadHandler.text;
+            Debug.Log(json);
+
             var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(json);
-            var players = dict.Select(kv => {
+            var players = dict.Select(kv =>
+            {
                 kv.Value.playerName = kv.Key;
                 return kv.Value;
             }).ToList();
@@ -146,17 +178,40 @@ public class FirebaseManager : MonoBehaviour
 
     IEnumerator RevealRoutine()
     {
-        string url = $"{firebaseUrl}rooms/{room}/players.json";
+        string url = $"{firebaseUrl}rooms/{PlayerPrefs.GetString("room")}/players.json";
+        print(url);
         UnityWebRequest req = UnityWebRequest.Get(url);
         yield return req.SendWebRequest();
 
         if (req.result == UnityWebRequest.Result.Success)
         {
-            var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(req.downloadHandler.text);
+            var json = req.downloadHandler.text;
+            Debug.Log("Received JSON: " + json);
+
+            var dict = JsonConvert.DeserializeObject<Dictionary<string, Player>>(json);
+
+            if (dict == null)
+            {
+                Debug.LogError("Failed to deserialize player data.");
+                yield break;
+            }
+
+            foreach (var kv in dict)
+            {
+                Debug.Log($"Checking player {kv.Key}, isImposter: {kv.Value.isImposter}");
+            }
+
             var imposter = dict.FirstOrDefault(kv => kv.Value.isImposter);
             RevealedImposter = imposter.Key;
+
+            Debug.Log("Imposter is: " + RevealedImposter);
+        }
+        else
+        {
+            Debug.LogError("Failed to fetch player data: " + req.error);
         }
     }
+
 
     IEnumerator Put(string path, string json)
     {
